@@ -1,0 +1,54 @@
+name:  Wpf Continuous Delivery
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        channel: [Dev]
+        targetPlatform: [x64]
+        include:
+          - channel: Dev
+            ChannelName: Dev
+            Configuration: Release
+    runs-on: windows-latest
+
+    env:
+      #App_Packages_Archive: AppPackages.zip
+      #App_Packages_Directory: AppPackages
+      #SigningCertificate: GitHubActionsDemo.pfx
+      Solution_Path: wpf_cicd.sln
+      #Test_Project_Path: MyWpfApp.Tests\MyWpfApp.Tests.csproj
+      #Wpf_Project_Path: MyWpfApp\MyWpfApp.csproj
+      #Wap_Project_Directory: MyWpfApp.Package
+      #Wap_Project_Name: MyWpfApp.Package.wapproj
+      #Actions_Allow_Unsecure_Commands: true # Allows AddPAth and SetEnv commands
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      # Use Nerdbank.GitVersioning to set version variables: https://github.com/AArnott/nbgv
+      - name: Use Nerdbank.GitVersioning to set version variables
+        uses: dotnet/nbgv@master
+        id: nbgv
+
+      # Install the .NET Core workload
+      - name: Install .NET Core
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: 6.0.x
+
+      # Add  MsBuild to the PATH: https://github.com/microsoft/setup-msbuild
+      - name: Setup MSBuild.exe
+        uses: microsoft/setup-msbuild@v1.1
+
