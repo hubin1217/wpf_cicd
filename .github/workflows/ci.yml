@@ -18,9 +18,13 @@ jobs:
     runs-on: windows-2022
 
     env:
+      App_Packages_Directory: AppPackages
       Solution_Name: wpf_cicd.sln
       # Test_Project_Path: wpf_cicd\test
-      Wpf_Project_Path: wpf_cicd.csproj
+      Wpf_Project_Path: wpf_cicd\wpf_cicd.csproj
+      Wap_Project_Directory: wap_wpf_cicd
+      Wap_Project_Name: wap_wpf_cicd.wapproj
+      SigningCertificate: wap_wpf_cicd_TemporaryKey.pfx
       Actions_Allow_Unsecure_Commands: true
 
     steps:
@@ -34,6 +38,7 @@ jobs:
       uses: dotnet/nbgv@master
       id: nbgv
 
+    # Install the .NET Core workload
     - name: Install .NET Core
       uses: actions/setup-dotnet@v3
       with:
@@ -44,10 +49,15 @@ jobs:
       uses: microsoft/setup-msbuild@v1.1
 
     # Update the version before build
+    - name: Update manifest version
+      run: |
+        [xml]$manifest = get-content ".\$env:Wap_Project_Directory\Package.appxmanifest"
+        $manifest.Package.Identity.Version = "${{ steps.nbgv.outputs.SimpleVersion }}.0"
+        $manifest.save(".\$env:Wap_Project_Directory\Package.appxmanifest")
 
     # Execute all unit tests in the solution
     - name: Execute unit tests
-      run: dotnet test
+      run: dotnet test #$env:Test_Project_Path
 
     # Restore the application to populate the obj folder with RuntimeIdentifiers
     - name: Restore the application
@@ -56,6 +66,39 @@ jobs:
         Configuration: ${{ matrix.configuration }}
         RuntimeIdentifier: win-${{ matrix.targetplatform }}
 
+    # Decode the Base64 encoded Pfx
+    - name: Decode the Pfx
+      run: |
+        $pfx_cert_byte = [System.Convert]::FromBase64String("${{ secrets.Base64_Encoded_Pfx }}")
+        $currentDirectory = Get-Location
+        $certificatePath = Join-Path -Path $currentDirectory -ChildPath $env:Wap_Project_Directory -AdditionalChildPath $env:SigningCertificate
+        [IO.File]::WriteAllBytes("$certificatePath", $pfx_cert_byte)
 
+    # Build the Windows Application Packaging project
+    - name: Build the Windows Application Packaging Project (wapproj)
+      run: msbuild $env:Solution_Path /p:Platform=$env:TargetPlatform /p:Configuration=$env:Configuration /p:UapAppxPackageBuildMode=$env:BuildMode /p:AppxBundle=$env:AppxBundle /p:PackageCertificateKeyFile=$env:SigningCertificate /p:PackageCertificatePassword=${{ secrets.Pfx_Key }}
+      env:
+        AppxBundle: Never
+        BuildMode: SideloadOnly
+        Configuration: Debug
+        TargetPlatform: ${{ matrix.targetplatform }}
 
-      
+    # Build the Windows Application Packaging project
+    - name: Build the Windows Application Packaging Project (wapproj)
+      run: msbuild $env:Solution_Name /p:Platform=$env:TargetPlatform /p:Configuration=$env:Configuration /p:UapAppxPackageBuildMode=$env:BuildMode /p:AppxBundle=$env:AppxBundle /p:PackageCertificateKeyFile=$env:SigningCertificate /p:PackageCertificatePassword=${{ secrets.Pfx_Key }}
+      env:
+        AppxBundle: Never
+        BuildMode: SideloadOnly
+        Configuration: Debug
+        TargetPlatform: ${{ matrix.targetplatform }}
+
+    # Remove the .pfx
+    - name: Remove the .pfx
+      run: Remove-Item -path $env:Wap_Project_Directory\$env:SigningCertificate
+
+    # Upload the MSIX package: https://github.com/marketplace/actions/upload-artifact
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v1
+      with:
+        name: MSIX Package
+        path: ${{ env.Wap_Project_Directory }}\${{ env.App_Packages_Directory }}
