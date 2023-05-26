@@ -7,7 +7,7 @@
   IgnorableNamespaces="uap rescap">
 
   <Identity
-    Name="60b8f543-dd23-4e23-a30d-c307ce2c83f4"
+    Name="wpfApp.DevOpsDemo.Local"
     Publisher="CN=Bin Hu"
     Version="1.0.0.0" />
 
